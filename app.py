@@ -6,20 +6,32 @@ from datetime import datetime
 import os
 
 app = Flask(__name__)
-app.secret_key = 'cns_la_paz_secret_key_2024'
+# ⚠️ CAMBIO 1: Usar variable de entorno para la clave secreta
+app.secret_key = os.environ.get('SECRET_KEY', 'cns_la_paz_secret_key_2024')
 
-# Configuración de base de datos
-DB_CONFIG = {
-    'host': 'localhost',
-    'port': '5432',
-    'database': 'inventario_cns',
-    'user': 'postgres',
-    'password': '123'
-}
-
+# ✅ CAMBIO 2: Configuración de BD desde variables de entorno (Render las provee)
 def get_db():
-    """Obtener conexión a la base de datos"""
-    return psycopg2.connect(**DB_CONFIG)
+    """Obtener conexión a la base de datos usando variables de entorno"""
+    try:
+        # Render proporciona DATABASE_URL automáticamente
+        database_url = os.environ.get('DATABASE_URL')
+        
+        if database_url:
+            # Usar la URL completa que da Render
+            conn = psycopg2.connect(database_url, sslmode='require')
+        else:
+            # Fallback para desarrollo local
+            conn = psycopg2.connect(
+                host=os.environ.get('DB_HOST', 'localhost'),
+                port=os.environ.get('DB_PORT', '5432'),
+                database=os.environ.get('DB_NAME', 'inventario_cns'),
+                user=os.environ.get('DB_USER', 'postgres'),
+                password=os.environ.get('DB_PASSWORD', '123')
+            )
+        return conn
+    except Exception as e:
+        print(f"❌ Error conectando a BD: {e}")
+        raise
 
 def login_required(f):
     """Decorador para requerir login"""
@@ -31,109 +43,10 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-# ============ CREAR CARPETA DATABASE Y ARCHIVO SQL ============
-def crear_carpeta_database():
-    """Crear carpeta database y archivo init.sql automáticamente"""
-    if not os.path.exists('database'):
-        os.makedirs('database')
-        print("📁 Carpeta 'database' creada")
-        
-        # Crear archivo init.sql
-        sql_content = """-- ==========================================
--- SISTEMA DE INVENTARIO CNS - ELECTROMEDICINA
--- Base de datos para Regional La Paz
--- Fecha de creación: {}
--- ==========================================
-
--- Crear base de datos
--- CREATE DATABASE inventario_cns;
-
--- \\c inventario_cns;
-
--- Tabla de usuarios
-CREATE TABLE IF NOT EXISTS usuarios (
-    id_usuario SERIAL PRIMARY KEY,
-    username VARCHAR(50) UNIQUE NOT NULL,
-    password VARCHAR(255) NOT NULL,
-    nombre_completo VARCHAR(100),
-    rol VARCHAR(20) DEFAULT 'usuario',
-    fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- Tabla de equipos de electromedicina
-CREATE TABLE IF NOT EXISTS equipos (
-    id_equipo SERIAL PRIMARY KEY,
-    codigo_inventario VARCHAR(50) UNIQUE NOT NULL,
-    nombre_equipo VARCHAR(100) NOT NULL,
-    tipo_equipo VARCHAR(50),
-    marca VARCHAR(50),
-    modelo VARCHAR(50),
-    numero_serie VARCHAR(50),
-    estado VARCHAR(20) DEFAULT 'operativo',
-    ubicacion VARCHAR(100),
-    fecha_adquisicion DATE,
-    ultimo_mantenimiento DATE,
-    observaciones TEXT,
-    fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- Usuario administrador por defecto
-INSERT INTO usuarios (username, password, nombre_completo, rol) 
-VALUES ('admin', 'admin123', 'Administrador CNS', 'admin')
-ON CONFLICT (username) DO NOTHING;
-
--- Equipos de ejemplo
-INSERT INTO equipos (codigo_inventario, nombre_equipo, tipo_equipo, marca, modelo, numero_serie, estado, ubicacion) VALUES
-('CNS-001', 'Monitor de Signos Vitales', 'Monitor', 'GE Healthcare', 'B650', 'SN001', 'operativo', 'Hospital La Paz'),
-('CNS-002', 'Electrocardiógrafo', 'Diagnóstico', 'Philips', 'PageWriter TC30', 'SN002', 'mantenimiento', 'Centro Salud Sur'),
-('CNS-003', 'Ventilador Mecánico', 'Soporte Vital', 'Draeger', 'Savina 300', 'SN003', 'operativo', 'UTI Hospital La Paz'),
-('CNS-004', 'Desfibrilador', 'Emergencia', 'Zoll', 'R Series', 'SN004', 'operativo', 'Emergencias Hospital'),
-('CNS-005', 'Bomba de Infusión', 'Administración', 'Braun', 'Perfusor Space', 'SN005', 'operativo', 'Pabellón Central'),
-('CNS-006', 'Electrocardiógrafo Digital', 'Diagnóstico', 'Mindray', 'BeneHeart R12', 'SN006', 'reparación', 'Mantenimiento'),
-('CNS-007', 'Monitor Neonatal', 'Monitor', 'Philips', 'IntelliVue X3', 'SN007', 'operativo', 'Neonatología'),
-('CNS-008', 'Electrocauterio', 'Quirúrgico', 'Valleylab', 'Force FX', 'SN008', 'operativo', 'Quirófano 1')
-ON CONFLICT (codigo_inventario) DO NOTHING;
-
--- Índices para búsquedas rápidas
-CREATE INDEX IF NOT EXISTS idx_equipos_codigo ON equipos(codigo_inventario);
-CREATE INDEX IF NOT EXISTS idx_equipos_estado ON equipos(estado);
-CREATE INDEX IF NOT EXISTS idx_equipos_ubicacion ON equipos(ubicacion);
-
--- Mostrar resumen
-SELECT 'Base de datos inicializada correctamente' as Mensaje;
-""".format(datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
-        
-        with open('database/init.sql', 'w', encoding='utf-8') as f:
-            f.write(sql_content)
-        print("📄 Archivo 'database/init.sql' creado")
-        print("💡 Puedes ejecutar este SQL en pgAdmin si necesitas recrear la BD")
-
-# ============ INICIALIZAR BASE DE DATOS ============
+# ✅ CAMBIO 3: Función simplificada para inicializar tablas (sin crear BD)
 def init_database():
-    """Crear base de datos y tablas si no existen"""
+    """Crear tablas si no existen (usando BD existente)"""
     try:
-        # Conectar a PostgreSQL sin base específica
-        conn_admin = psycopg2.connect(
-            host='localhost',
-            port='5432',
-            user='postgres',
-            password='123'
-        )
-        conn_admin.autocommit = True
-        cursor_admin = conn_admin.cursor()
-        
-        # Crear base de datos si no existe
-        cursor_admin.execute("SELECT 1 FROM pg_database WHERE datname='inventario_cns'")
-        if not cursor_admin.fetchone():
-            cursor_admin.execute("CREATE DATABASE inventario_cns")
-            print("✅ Base de datos 'inventario_cns' creada")
-        else:
-            print("ℹ️ Base de datos 'inventario_cns' ya existe")
-        
-        cursor_admin.close()
-        conn_admin.close()
-        
-        # Conectar a la base de datos específica
         conn = get_db()
         cursor = conn.cursor()
         
@@ -148,7 +61,6 @@ def init_database():
                 fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
-        print("✅ Tabla 'usuarios' lista")
         
         # Crear tabla de equipos
         cursor.execute("""
@@ -168,7 +80,6 @@ def init_database():
                 fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
-        print("✅ Tabla 'equipos' lista")
         
         # Insertar usuario admin si no existe
         cursor.execute("SELECT * FROM usuarios WHERE username='admin'")
@@ -177,7 +88,7 @@ def init_database():
                 INSERT INTO usuarios (username, password, nombre_completo, rol)
                 VALUES ('admin', 'admin123', 'Administrador CNS', 'admin')
             """)
-            print("✅ Usuario 'admin' creado")
+            print("✅ Usuario admin creado")
         
         # Insertar datos de ejemplo si no hay equipos
         cursor.execute("SELECT COUNT(*) FROM equipos")
@@ -193,8 +104,6 @@ def init_database():
                  'R Series', 'SN004', 'operativo', 'Emergencias Hospital'),
                 ('CNS-005', 'Bomba de Infusión', 'Administración', 'Braun', 
                  'Perfusor Space', 'SN005', 'operativo', 'Pabellón Central'),
-                ('CNS-006', 'Ultrasonido', 'Diagnóstico', 'Mindray', 
-                 'DC-70', 'SN006', 'operativo', 'Radiología'),
             ]
             
             for eq in equipos_ejemplo:
@@ -214,21 +123,14 @@ def init_database():
         cursor.close()
         conn.close()
         
-        print("🎉 Base de datos inicializada correctamente")
+        print("✅ Base de datos inicializada correctamente")
         return True
         
     except Exception as e:
-        print(f"❌ Error inicializando base de datos: {e}")
-        print("\n⚠️ SOLUCIÓN RÁPIDA:")
-        print("1. Asegúrate que PostgreSQL esté instalado")
-        print("2. Verifica que PostgreSQL esté corriendo:")
-        print("   - Windows: net start postgresql-15")
-        print("   - Linux: sudo systemctl start postgresql")
-        print("3. Asegúrate que la contraseña de PostgreSQL es '123'")
-        print("   Si no es así, cambia la contraseña o edita DB_CONFIG en app.py")
+        print(f"❌ Error inicializando tablas: {e}")
         return False
 
-# ============ RUTAS PRINCIPALES ============
+# ============ RUTAS PRINCIPALES (tus mismas rutas aquí) ============
 
 @app.route('/')
 def index():
@@ -278,7 +180,7 @@ def dashboard():
     """Dashboard principal con inventario"""
     return render_template('index.html', username=session.get('username'))
 
-# ============ API PARA EQUIPOS ============
+# ============ API PARA EQUIPOS (tus mismas rutas) ============
 
 @app.route('/api/equipos')
 @login_required
@@ -413,28 +315,28 @@ def get_estadisticas():
         'reparacion': reparacion
     })
 
+# ✅ CAMBIO 4: Configuración para producción en Render
 if __name__ == '__main__':
     print("=" * 60)
     print("🚀 SISTEMA DE INVENTARIO CNS - ELECTROMEDICINA")
     print("🏥 Regional La Paz - Bolivia")
     print("=" * 60)
     
-    # Crear carpeta database automáticamente
-    crear_carpeta_database()
+    # Solo inicializar si estamos en desarrollo o si no hay tablas
+    print("📦 Inicializando tablas en la base de datos...")
+    init_database()
     
-    print("\n📦 Inicializando base de datos...")
-    if init_database():
-        print("\n" + "=" * 60)
-        print("✨ SISTEMA LISTO PARA USAR")
-        print("=" * 60)
-        print("🔗 Abre en tu navegador: http://localhost:5000")
-        print("👤 Usuario: admin")
-        print("🔑 Contraseña: admin123")
-        print("=" * 60)
-        print("\n💾 Respaldo de BD guardado en: database/init.sql")
-        print("📁 Carpeta 'database' creada automáticamente")
-        print("\n✅ Presiona CTRL+C para detener el servidor\n")
-        
-        app.run(debug=True, host='0.0.0.0', port=5000)
-    else:
-        print("\n❌ No se pudo iniciar el sistema. Verifica PostgreSQL.")
+    # ✅ USAR EL PUERTO QUE RENDER ASIGNA (IMPORTANTE)
+    port = int(os.environ.get('PORT', 5000))
+    
+    print("\n" + "=" * 60)
+    print("✨ SISTEMA LISTO PARA USAR")
+    print("=" * 60)
+    print(f"🔗 Servidor corriendo en puerto: {port}")
+    print("👤 Usuario: admin")
+    print("🔑 Contraseña: admin123")
+    print("=" * 60)
+    
+    # En producción, debug=False
+    debug_mode = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
+    app.run(host='0.0.0.0', port=port, debug=debug_mode)
