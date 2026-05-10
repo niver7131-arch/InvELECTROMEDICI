@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Inventario CNS Electromedicina</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background: #f0f2f5;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            padding-bottom: 60px;
+        }
+        
+        /* Navbar */
+        .navbar {
+            background: linear-gradient(135deg, #1a472a 0%, #0d2818 100%);
+            padding: 15px 0;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .navbar-brand {
+            color: #ffd700 !important;
+            font-weight: bold;
+            font-size: 1.5rem;
+        }
+        
+        .user-info {
+            color: white;
+            margin-right: 15px;
+        }
+        
+        /* Tarjetas de estadísticas */
+        .stats-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            transition: transform 0.3s, box-shadow 0.3s;
+            cursor: pointer;
+            text-align: center;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+        }
+        
+        .stat-icon {
+            font-size: 45px;
+            margin-bottom: 15px;
+        }
+        
+        .stat-number {
+            font-size: 36px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .stat-label {
+            color: #666;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        /* Tabla */
+        .card {
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+            border: none;
+            margin-bottom: 20px;
+        }
+        
+        .card-header {
+            background: white;
+            border-bottom: 2px solid #f0f2f5;
+            padding: 20px;
+            border-radius: 15px 15px 0 0 !important;
+        }
+        
+        .btn-add {
+            background: linear-gradient(135deg, #1a472a 0%, #0d2818 100%);
+            color: #ffd700;
+            border: none;
+            padding: 10px 25px;
+            border-radius: 25px;
+            transition: all 0.3s;
+        }
+        
+        .btn-add:hover {
+            transform: scale(1.05);
+            color: #ffed4a;
+        }
+        
+        .table {
+            margin-bottom: 0;
+        }
+        
+        .table thead th {
+            background: #f8f9fa;
+            border-bottom: 2px solid #dee2e6;
+            font-weight: 600;
+        }
+        
+        .estado-operativo {
+            color: #28a745;
+            font-weight: bold;
+            padding: 5px 10px;
+            background: #d4edda;
+            border-radius: 20px;
+            display: inline-block;
+        }
+        
+        .estado-mantenimiento {
+            color: #ffc107;
+            font-weight: bold;
+            padding: 5px 10px;
+            background: #fff3cd;
+            border-radius: 20px;
+            display: inline-block;
+        }
+        
+        .estado-dañado {
+            color: #dc3545;
+            font-weight: bold;
+            padding: 5px 10px;
+            background: #f8d7da;
+            border-radius: 20px;
+            display: inline-block;
+        }
+        
+        .estado-reparación {
+            color: #17a2b8;
+            font-weight: bold;
+            padding: 5px 10px;
+            background: #d1ecf1;
+            border-radius: 20px;
+            display: inline-block;
+        }
+        
+        .btn-sm {
+            margin: 0 3px;
+            padding: 5px 10px;
+        }
+        
+        /* Modal */
+        .modal-content {
+            border-radius: 15px;
+        }
+        
+        .modal-header {
+            background: linear-gradient(135deg, #1a472a 0%, #0d2818 100%);
+            color: white;
+            border-radius: 15px 15px 0 0;
+        }
+        
+        .btn-close-white {
+            filter: brightness(0) invert(1);
+        }
+        
+        .form-control:focus, .form-select:focus {
+            border-color: #1a472a;
+            box-shadow: 0 0 0 0.2rem rgba(26, 71, 42, 0.25);
+        }
+        
+        /* Footer */
+        .footer {
+            background: white;
+            border-top: 1px solid #dee2e6;
+            padding: 20px 0;
+            text-align: center;
+            position: fixed;
+            bottom: 0;
+            width: 100%;
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .stats-container {
+                grid-template-columns: 1fr;
+            }
+            
+            .table-responsive {
+                overflow-x: auto;
+            }
+            
+            .footer {
+                position: relative;
+                margin-top: 30px;
+            }
+        }
+        
+        /* Loading */
+        .loading {
+            text-align: center;
+            padding: 50px;
+        }
+        
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #1a472a;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg">
+        <div class="container-fluid">
+            <span class="navbar-brand">
+                <i class="fas fa-heartbeat"></i> CNS Electromedicina - La Paz
+            </span>
+            <div class="d-flex align-items-center">
+                <span class="user-info">
+                    <i class="fas fa-user-circle"></i> <span id="nombreUsuario">{{ username }}</span>
+                </span>
+                <a href="/logout" class="btn btn-outline-light btn-sm">
+                    <i class="fas fa-sign-out-alt"></i> Salir
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid mt-4">
+        <!-- Estadísticas -->
+        <div class="stats-container" id="estadisticas">
+            <div class="stat-card">
+                <div class="stat-icon"><i class="fas fa-microscope"></i></div>
+                <div class="stat-number" id="total">0</div>
+                <div class="stat-label">Total Equipos</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon"><i class="fas fa-check-circle" style="color:#28a745"></i></div>
+                <div class="stat-number" id="operativos">0</div>
+                <div class="stat-label">Operativos</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon"><i class="fas fa-tools" style="color:#ffc107"></i></div>
+                <div class="stat-number" id="mantenimiento">0</div>
+                <div class="stat-label">Mantenimiento</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon"><i class="fas fa-exclamation-triangle" style="color:#dc3545"></i></div>
+                <div class="stat-number" id="danados">0</div>
+                <div class="stat-label">Dañados</div>
+            </div>
+        </div>
+
+        <!-- Tabla de equipos -->
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="fas fa-list"></i> Inventario de Equipos Médicos
+                </h5>
+                <button class="btn btn-add" onclick="abrirModalAgregar()">
+                    <i class="fas fa-plus"></i> Agregar Equipo
+                </button>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover" id="tablaEquipos">
+                        <thead>
+                            <tr>
+                                <th>Código</th>
+                                <th>Nombre</th>
+                                <th>Tipo</th>
+                                <th>Marca</th>
+                                <th>Modelo</th>
+                                <th>Estado</th>
+                                <th>Ubicación</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tablaBody">
+                            <tr>
+                                <td colspan="8" class="text-center">
+                                    <div class="loading">
+                                        <div class="spinner"></div>
+                                        <p class="mt-2">Cargando equipos...</p>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para agregar/editar equipo -->
+    <div class="modal fade" id="equipoModal" tabindex="-1" data-bs-backdrop="static">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalTitle">
+                        <i class="fas fa-plus-circle"></i> Agregar Equipo
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="equipoForm">
+                        <input type="hidden" id="equipoId">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Código Inventario *</label>
+                                <input type="text" class="form-control" id="codigo" required>
+                                <small class="text-muted">Ej: CNS-001</small>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Nombre del Equipo *</label>
+                                <input type="text" class="form-control" id="nombre" required>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">Tipo</label>
+                                <input type="text" class="form-control" id="tipo" placeholder="Ej: Monitor, Ventilador">
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">Marca</label>
+                                <input type="text" class="form-control" id="marca">
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">Modelo</label>
+                                <input type="text" class="form-control" id="modelo">
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Número de Serie</label>
+                                <input type="text" class="form-control" id="serie">
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Estado</label>
+                                <select class="form-select" id="estado">
+                                    <option value="operativo">✅ Operativo</option>
+                                    <option value="mantenimiento">🔧 Mantenimiento</option>
+                                    <option value="dañado">❌ Dañado</option>
+                                    <option value="reparación">⚙️ Reparación</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Ubicación</label>
+                            <input type="text" class="form-control" id="ubicacion" placeholder="Ej: Hospital La Paz - Piso 2">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Observaciones</label>
+                            <textarea class="form-control" id="observaciones" rows="3" placeholder="Notas adicionales..."></textarea>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times"></i> Cancelar
+                    </button>
+                    <button type="button" class="btn btn-success" onclick="guardarEquipo()">
+                        <i class="fas fa-save"></i> Guardar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <p class="mb-0">© 2026 CNS - Centro Nacional de Salud | Regional La Paz - Bolivia</p>
+            <small class="text-muted">Sistema de Inventario de Electromedicina v1.0</small>
+        </div>
+    </footer>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        let modal;
+        
+        // Función para cargar equipos
+        function cargarEquipos() {
+            $.ajax({
+                url: '/api/equipos',
+                method: 'GET',
+                success: function(equipos) {
+                    const tbody = $('#tablaBody');
+                    tbody.empty();
+                    
+                    if (equipos.length === 0) {
+                        tbody.html('<tr><td colspan="8" class="text-center">No hay equipos registrados</td></tr>');
+                    } else {
+                        equipos.forEach(eq => {
+                            let estadoClass = '';
+                            let estadoText = eq.estado.toUpperCase();
+                            
+                            switch(eq.estado) {
+                                case 'operativo':
+                                    estadoClass = 'estado-operativo';
+                                    break;
+                                case 'mantenimiento':
+                                    estadoClass = 'estado-mantenimiento';
+                                    break;
+                                case 'dañado':
+                                    estadoClass = 'estado-dañado';
+                                    break;
+                                case 'reparación':
+                                    estadoClass = 'estado-reparación';
+                                    break;
+                            }
+                            
+                            const row = `
+                                <tr>
+                                    <td><strong>${eq.codigo_inventario}</strong></td>
+                                    <td>${eq.nombre_equipo}</td>
+                                    <td>${eq.tipo_equipo || '-'}</td>
+                                    <td>${eq.marca || '-'}</td>
+                                    <td>${eq.modelo || '-'}</td>
+                                    <td><span class="${estadoClass}">${estadoText}</span></td>
+                                    <td>${eq.ubicacion || '-'}</td>
+                                    <td>
+                                        <button class="btn btn-sm btn-warning" onclick="editarEquipo(${eq.id_equipo})" title="Editar">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-danger" onclick="eliminarEquipo(${eq.id_equipo})" title="Eliminar">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            `;
+                            tbody.append(row);
+                        });
+                    }
+                },
+                error: function(error) {
+                    console.error('Error:', error);
+                    $('#tablaBody').html('<tr><td colspan="8" class="text-center text-danger">Error al cargar equipos</td></tr>');
+                }
+            });
+        }
+        
+        // Función para cargar estadísticas
+        function cargarEstadisticas() {
+            $.ajax({
+                url: '/api/estadisticas',
+                method: 'GET',
+                success: function(data) {
+                    $('#total').text(data.total);
+                    $('#operativos').text(data.operativos);
+                    $('#mantenimiento').text(data.mantenimiento);
+                    $('#danados').text(data.danados);
+                },
+                error: function(error) {
+                    console.error('Error al cargar estadísticas:', error);
+                }
+            });
+        }
+        
+        // Abrir modal para agregar
+        function abrirModalAgregar() {
+            $('#modalTitle').html('<i class="fas fa-plus-circle"></i> Agregar Equipo');
+            $('#equipoForm')[0].reset();
+            $('#equipoId').val('');
+            modal.show();
+        }
+        
+        // Editar equipo
+        function editarEquipo(id) {
+            $.ajax({
+                url: '/api/equipos',
+                method: 'GET',
+                success: function(equipos) {
+                    const eq = equipos.find(e => e.id_equipo === id);
+                    if (eq) {
+                        $('#modalTitle').html('<i class="fas fa-edit"></i> Editar Equipo');
+                        $('#equipoId').val(eq.id_equipo);
+                        $('#codigo').val(eq.codigo_inventario);
+                        $('#nombre').val(eq.nombre_equipo);
+                        $('#tipo').val(eq.tipo_equipo || '');
+                        $('#marca').val(eq.marca || '');
+                        $('#modelo').val(eq.modelo || '');
+                        $('#serie').val(eq.numero_serie || '');
+                        $('#estado').val(eq.estado);
+                        $('#ubicacion').val(eq.ubicacion || '');
+                        $('#observaciones').val(eq.observaciones || '');
+                        modal.show();
+                    }
+                }
+            });
+        }
+        
+        // Guardar equipo
+        function guardarEquipo() {
+            // Validar campos requeridos
+            if (!$('#codigo').val() || !$('#nombre').val()) {
+                alert('Por favor complete los campos requeridos: Código y Nombre');
+                return;
+            }
+            
+            const data = {
+                codigo_inventario: $('#codigo').val(),
+                nombre_equipo: $('#nombre').val(),
+                tipo_equipo: $('#tipo').val(),
+                marca: $('#marca').val(),
+                modelo: $('#modelo').val(),
+                numero_serie: $('#serie').val(),
+                estado: $('#estado').val(),
+                ubicacion: $('#ubicacion').val(),
+                observaciones: $('#observaciones').val()
+            };
+            
+            const id = $('#equipoId').val();
+            const url = id ? `/api/equipos/${id}` : '/api/equipos';
+            const method = id ? 'PUT' : 'POST';
+            
+            $.ajax({
+                url: url,
+                method: method,
+                contentType: 'application/json',
+                data: JSON.stringify(data),
+                success: function(response) {
+                    if (response.success) {
+                        modal.hide();
+                        cargarEquipos();
+                        cargarEstadisticas();
+                        alert(response.message);
+                    } else {
+                        alert('Error: ' + response.message);
+                    }
+                },
+                error: function(xhr) {
+                    let errorMsg = 'Error al guardar el equipo';
+                    if (xhr.responseJSON && xhr.responseJSON.message) {
+                        errorMsg = xhr.responseJSON.message;
+                    }
+                    alert(errorMsg);
+                }
+            });
+        }
+        
+        // Eliminar equipo
+        function eliminarEquipo(id) {
+            if (confirm('¿Estás seguro de eliminar este equipo?\nEsta acción no se puede deshacer.')) {
+                $.ajax({
+                    url: `/api/equipos/${id}`,
+                    method: 'DELETE',
+                    success: function(response) {
+                        if (response.success) {
+                            cargarEquipos();
+                            cargarEstadisticas();
+                            alert(response.message);
+                        } else {
+                            alert('Error: ' + response.message);
+                        }
+                    },
+                    error: function() {
+                        alert('Error al eliminar el equipo');
+                    }
+                });
+            }
+        }
+        
+        // Inicializar cuando el documento está listo
+        $(document).ready(function() {
+            modal = new bootstrap.Modal(document.getElementById('equipoModal'));
+            cargarEquipos();
+            cargarEstadisticas();
+            
+            // Auto-refrescar cada 30 segundos
+            setInterval(() => {
+                cargarEquipos();
+                cargarEstadisticas();
+            }, 30000);
+        });
+    </script>
+</body>
+</html>
