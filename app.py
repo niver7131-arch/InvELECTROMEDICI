@@ -46,9 +46,13 @@ def login_required(f):
 # ✅ CAMBIO 3: Función simplificada para inicializar tablas (sin crear BD)
 def init_database():
     """Crear tablas si no existen (usando BD existente)"""
+    conn = None
+    cursor = None
     try:
+        print("🔧 Conectando a la base de datos...")
         conn = get_db()
         cursor = conn.cursor()
+        print("✅ Conexión establecida, creando tablas si no existen...")
         
         # Crear tabla de usuarios
         cursor.execute("""
@@ -61,6 +65,7 @@ def init_database():
                 fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        print("✅ Tabla 'usuarios' verificada/creada")
         
         # Crear tabla de equipos
         cursor.execute("""
@@ -80,6 +85,7 @@ def init_database():
                 fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        print("✅ Tabla 'equipos' verificada/creada")
         
         # Insertar usuario admin si no existe
         cursor.execute("SELECT * FROM usuarios WHERE username='admin'")
@@ -89,10 +95,15 @@ def init_database():
                 VALUES ('admin', 'admin123', 'Administrador CNS', 'admin')
             """)
             print("✅ Usuario admin creado")
+        else:
+            print("ℹ️ Usuario admin ya existe")
         
         # Insertar datos de ejemplo si no hay equipos
         cursor.execute("SELECT COUNT(*) FROM equipos")
-        if cursor.fetchone()[0] == 0:
+        count = cursor.fetchone()[0]
+        print(f"ℹ️ Equipos existentes: {count}")
+        
+        if count == 0:
             equipos_ejemplo = [
                 ('CNS-001', 'Monitor de Signos Vitales', 'Monitor', 'GE Healthcare', 
                  'B650', 'SN001', 'operativo', 'Hospital La Paz'),
@@ -120,17 +131,47 @@ def init_database():
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_equipos_ubicacion ON equipos(ubicacion)")
         
         conn.commit()
-        cursor.close()
-        conn.close()
-        
         print("✅ Base de datos inicializada correctamente")
         return True
         
     except Exception as e:
         print(f"❌ Error inicializando tablas: {e}")
+        import traceback
+        traceback.print_exc()
+        if conn:
+            conn.rollback()
         return False
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
-# ============ RUTAS PRINCIPALES (tus mismas rutas aquí) ============
+# ============ INICIALIZAR BASE DE DATOS AL ARRANCAR LA APP ============
+# 🔴 IMPORTANTE: Esto se ejecuta ANTES de que Gunicorn arranque
+print("=" * 60)
+print("🚀 SISTEMA DE INVENTARIO CNS - ELECTROMEDICINA")
+print("🏥 Regional La Paz - Bolivia")
+print("=" * 60)
+
+# Verificar variables de entorno
+print("📋 Verificando configuración:")
+print(f"  - DATABASE_URL: {'✅ Configurada' if os.environ.get('DATABASE_URL') else '❌ No configurada'}")
+print(f"  - SECRET_KEY: {'✅ Configurada' if os.environ.get('SECRET_KEY') else '⚠️ Usando valor por defecto'}")
+print(f"  - PORT: {os.environ.get('PORT', '5000')}")
+
+# Inicializar base de datos
+print("\n📦 Inicializando tablas en la base de datos...")
+init_database()
+
+print("\n" + "=" * 60)
+print("✨ SISTEMA LISTO PARA USAR")
+print("=" * 60)
+print("👤 Usuario: admin")
+print("🔑 Contraseña: admin123")
+print("=" * 60)
+
+# ============ RUTAS PRINCIPALES ============
 
 @app.route('/')
 def index():
@@ -146,24 +187,28 @@ def login():
         username = request.form.get('username')
         password = request.form.get('password')
         
-        conn = get_db()
-        cursor = conn.cursor(cursor_factory=RealDictCursor)
-        cursor.execute(
-            "SELECT * FROM usuarios WHERE username = %s AND password = %s",
-            (username, password)
-        )
-        user = cursor.fetchone()
-        cursor.close()
-        conn.close()
-        
-        if user:
-            session['user_id'] = user['id_usuario']
-            session['username'] = user['username']
-            session['nombre'] = user['nombre_completo']
-            flash(f'¡Bienvenido {session["nombre"] or session["username"]}!', 'success')
-            return redirect(url_for('dashboard'))
-        else:
-            flash('Usuario o contraseña incorrectos', 'danger')
+        try:
+            conn = get_db()
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+            cursor.execute(
+                "SELECT * FROM usuarios WHERE username = %s AND password = %s",
+                (username, password)
+            )
+            user = cursor.fetchone()
+            cursor.close()
+            conn.close()
+            
+            if user:
+                session['user_id'] = user['id_usuario']
+                session['username'] = user['username']
+                session['nombre'] = user['nombre_completo']
+                flash(f'¡Bienvenido {session["nombre"] or session["username"]}!', 'success')
+                return redirect(url_for('dashboard'))
+            else:
+                flash('Usuario o contraseña incorrectos', 'danger')
+        except Exception as e:
+            print(f"❌ Error en login: {e}")
+            flash('Error al conectar con la base de datos', 'danger')
     
     return render_template('login.html')
 
@@ -180,30 +225,34 @@ def dashboard():
     """Dashboard principal con inventario"""
     return render_template('index.html', username=session.get('username'))
 
-# ============ API PARA EQUIPOS (tus mismas rutas) ============
+# ============ API PARA EQUIPOS ============
 
 @app.route('/api/equipos')
 @login_required
 def get_equipos():
     """Obtener todos los equipos (JSON)"""
-    conn = get_db()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
-    cursor.execute("""
-        SELECT id_equipo, codigo_inventario, nombre_equipo, tipo_equipo, 
-               marca, modelo, numero_serie, estado, ubicacion, 
-               ultimo_mantenimiento, observaciones
-        FROM equipos ORDER BY id_equipo DESC
-    """)
-    equipos = cursor.fetchall()
-    cursor.close()
-    conn.close()
-    
-    # Formatear fechas
-    for equipo in equipos:
-        if equipo['ultimo_mantenimiento']:
-            equipo['ultimo_mantenimiento'] = equipo['ultimo_mantenimiento'].strftime('%Y-%m-%d')
-    
-    return jsonify(equipos)
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute("""
+            SELECT id_equipo, codigo_inventario, nombre_equipo, tipo_equipo, 
+                   marca, modelo, numero_serie, estado, ubicacion, 
+                   ultimo_mantenimiento, observaciones
+            FROM equipos ORDER BY id_equipo DESC
+        """)
+        equipos = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        
+        # Formatear fechas
+        for equipo in equipos:
+            if equipo['ultimo_mantenimiento']:
+                equipo['ultimo_mantenimiento'] = equipo['ultimo_mantenimiento'].strftime('%Y-%m-%d')
+        
+        return jsonify(equipos)
+    except Exception as e:
+        print(f"❌ Error obteniendo equipos: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/equipos', methods=['POST'])
 @login_required
@@ -286,57 +335,42 @@ def delete_equipo(id):
 @login_required
 def get_estadisticas():
     """Obtener estadísticas del inventario"""
-    conn = get_db()
-    cursor = conn.cursor()
-    
-    cursor.execute("SELECT COUNT(*) FROM equipos")
-    total = cursor.fetchone()[0]
-    
-    cursor.execute("SELECT COUNT(*) FROM equipos WHERE estado = 'operativo'")
-    operativos = cursor.fetchone()[0]
-    
-    cursor.execute("SELECT COUNT(*) FROM equipos WHERE estado = 'mantenimiento'")
-    mantenimiento = cursor.fetchone()[0]
-    
-    cursor.execute("SELECT COUNT(*) FROM equipos WHERE estado = 'dañado'")
-    danados = cursor.fetchone()[0]
-    
-    cursor.execute("SELECT COUNT(*) FROM equipos WHERE estado = 'reparación'")
-    reparacion = cursor.fetchone()[0]
-    
-    cursor.close()
-    conn.close()
-    
-    return jsonify({
-        'total': total,
-        'operativos': operativos,
-        'mantenimiento': mantenimiento,
-        'danados': danados,
-        'reparacion': reparacion
-    })
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT COUNT(*) FROM equipos")
+        total = cursor.fetchone()[0]
+        
+        cursor.execute("SELECT COUNT(*) FROM equipos WHERE estado = 'operativo'")
+        operativos = cursor.fetchone()[0]
+        
+        cursor.execute("SELECT COUNT(*) FROM equipos WHERE estado = 'mantenimiento'")
+        mantenimiento = cursor.fetchone()[0]
+        
+        cursor.execute("SELECT COUNT(*) FROM equipos WHERE estado = 'dañado'")
+        danados = cursor.fetchone()[0]
+        
+        cursor.execute("SELECT COUNT(*) FROM equipos WHERE estado = 'reparación'")
+        reparacion = cursor.fetchone()[0]
+        
+        cursor.close()
+        conn.close()
+        
+        return jsonify({
+            'total': total,
+            'operativos': operativos,
+            'mantenimiento': mantenimiento,
+            'danados': danados,
+            'reparacion': reparacion
+        })
+    except Exception as e:
+        print(f"❌ Error obteniendo estadísticas: {e}")
+        return jsonify({'error': str(e)}), 500
 
-# ✅ CAMBIO 4: Configuración para producción en Render
+# ============ CONFIGURACIÓN PARA DESARROLLO LOCAL ============
+# Este bloque solo se ejecuta si ejecutas python app.py directamente
 if __name__ == '__main__':
-    print("=" * 60)
-    print("🚀 SISTEMA DE INVENTARIO CNS - ELECTROMEDICINA")
-    print("🏥 Regional La Paz - Bolivia")
-    print("=" * 60)
-    
-    # Solo inicializar si estamos en desarrollo o si no hay tablas
-    print("📦 Inicializando tablas en la base de datos...")
-    init_database()
-    
-    # ✅ USAR EL PUERTO QUE RENDER ASIGNA (IMPORTANTE)
     port = int(os.environ.get('PORT', 5000))
-    
-    print("\n" + "=" * 60)
-    print("✨ SISTEMA LISTO PARA USAR")
-    print("=" * 60)
-    print(f"🔗 Servidor corriendo en puerto: {port}")
-    print("👤 Usuario: admin")
-    print("🔑 Contraseña: admin123")
-    print("=" * 60)
-    
-    # En producción, debug=False
     debug_mode = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
     app.run(host='0.0.0.0', port=port, debug=debug_mode)
